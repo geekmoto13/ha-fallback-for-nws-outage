@@ -1,0 +1,129 @@
+# ---------------------------------------------------------------------------
+# METAR backup for the Home Assistant NWS integration
+#
+# Add this to /config/configuration.yaml as new top-level keys (see README.md).
+# If you already have a top-level `rest:` or `template:` key, add the list
+# items below to that key instead of repeating the key.
+#
+# Before use:
+#   1. Create the two helpers described in the README
+#      (input_select.weather_source and input_text.weather_station).
+#   2. Replace weather.YOUR_NWS_ENTITY (3 places) with your NWS weather entity.
+#
+# Assumes a US customary unit system (degrees F, mph, inHg).
+# For metric, see "Units" in the README.
+# ---------------------------------------------------------------------------
+
+rest:
+  - resource_template: "https://aviationweather.gov/api/data/metar?ids={{ states('input_text.weather_station') | upper }}&format=json"
+    scan_interval: 600
+    timeout: 20
+    headers:
+      User-Agent: "HomeAssistant-METAR-backup"
+    sensor:
+      - name: "METAR temperature"
+        unique_id: metar_backup_temperature
+        unit_of_measurement: "°F"
+        device_class: temperature
+        state_class: measurement
+        value_template: >-
+          {% if value_json | length > 0 and value_json[0].temp is number %}
+            {{ (value_json[0].temp * 9 / 5 + 32) | round(1) }}
+          {% else %}unknown{% endif %}
+
+      - name: "METAR humidity"
+        unique_id: metar_backup_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        # METARs report dew point, not humidity, so this is calculated
+        # from temperature and dew point (Magnus formula).
+        value_template: >-
+          {% if value_json | length > 0 and value_json[0].temp is number and value_json[0].dewp is number %}
+            {% set t = value_json[0].temp %}
+            {% set d = value_json[0].dewp %}
+            {% set rh = 100 * e ** ((17.625 * d) / (243.04 + d)) / e ** ((17.625 * t) / (243.04 + t)) %}
+            {{ [rh, 100] | min | round(0) }}
+          {% else %}unknown{% endif %}
+
+      - name: "METAR wind speed"
+        unique_id: metar_backup_wind_speed
+        unit_of_measurement: "mph"
+        device_class: wind_speed
+        state_class: measurement
+        value_template: >-
+          {% if value_json | length > 0 and value_json[0].wspd is number %}
+            {{ (value_json[0].wspd * 1.15078) | round(1) }}
+          {% else %}unknown{% endif %}
+
+      - name: "METAR wind gust"
+        unique_id: metar_backup_wind_gust
+        unit_of_measurement: "mph"
+        device_class: wind_speed
+        state_class: measurement
+        value_template: >-
+          {% if value_json | length > 0 %}
+            {{ ((value_json[0].wgst | default(0, true)) * 1.15078) | round(1) }}
+          {% else %}unknown{% endif %}
+
+      - name: "METAR pressure"
+        unique_id: metar_backup_pressure
+        unit_of_measurement: "inHg"
+        device_class: pressure
+        state_class: measurement
+        value_template: >-
+          {% if value_json | length > 0 and value_json[0].altim is number %}
+            {{ (value_json[0].altim * 0.02953) | round(2) }}
+          {% else %}unknown{% endif %}
+
+      - name: "METAR report time"
+        unique_id: metar_backup_report_time
+        device_class: timestamp
+        value_template: >-
+          {% if value_json | length > 0 %}
+            {{ value_json[0].obsTime | timestamp_custom('%Y-%m-%dT%H:%M:%S+00:00', false) }}
+          {% else %}unknown{% endif %}
+
+template:
+  - sensor:
+      - name: "Selected weather temperature"
+        unique_id: selected_weather_temperature
+        unit_of_measurement: "°F"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {% set src = states('input_select.weather_source') %}
+          {% set nws = state_attr('weather.YOUR_NWS_ENTITY', 'temperature') | float(none) %}
+          {% set metar = states('sensor.metar_temperature') | float(none) %}
+          {% if src == 'NWS' %}{{ nws if nws is not none else 'unknown' }}
+          {% elif src == 'METAR' %}{{ metar if metar is not none else 'unknown' }}
+          {% else %}{{ nws if nws is not none else (metar if metar is not none else 'unknown') }}
+          {% endif %}
+
+      - name: "Selected weather humidity"
+        unique_id: selected_weather_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {% set src = states('input_select.weather_source') %}
+          {% set nws = state_attr('weather.YOUR_NWS_ENTITY', 'humidity') | float(none) %}
+          {% set metar = states('sensor.metar_humidity') | float(none) %}
+          {% if src == 'NWS' %}{{ nws if nws is not none else 'unknown' }}
+          {% elif src == 'METAR' %}{{ metar if metar is not none else 'unknown' }}
+          {% else %}{{ nws if nws is not none else (metar if metar is not none else 'unknown') }}
+          {% endif %}
+
+      - name: "Selected weather wind speed"
+        unique_id: selected_weather_wind_speed
+        unit_of_measurement: "mph"
+        device_class: wind_speed
+        state_class: measurement
+        state: >-
+          {% set src = states('input_select.weather_source') %}
+          {% set nws = state_attr('weather.YOUR_NWS_ENTITY', 'wind_speed') | float(none) %}
+          {% set metar = states('sensor.metar_wind_speed') | float(none) %}
+          {% if src == 'NWS' %}{{ nws if nws is not none else 'unknown' }}
+          {% elif src == 'METAR' %}{{ metar if metar is not none else 'unknown' }}
+          {% else %}{{ nws if nws is not none else (metar if metar is not none else 'unknown') }}
+          {% endif %}
