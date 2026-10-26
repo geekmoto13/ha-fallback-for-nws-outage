@@ -1,0 +1,91 @@
+--- a/metar_backup.yaml
++++ b/metar_backup.yaml
+@@ -15,7 +15,7 @@
+         device_class: temperature
+         state_class: measurement
+         value_template: >-
+-          {% if value_json | length > 0 and value_json[0].temp is number %}
++          {% if value_json is not mapping and value_json | length > 0 and value_json[0].temp is number %}
+             {{ (value_json[0].temp * 9 / 5 + 32) | round(1) }}
+           {% else %}unknown{% endif %}
+       - name: "METAR humidity"
+@@ -24,7 +24,7 @@
+         device_class: humidity
+         state_class: measurement
+         value_template: >-
+-          {% if value_json | length > 0 and value_json[0].temp is number and value_json[0].dewp is number %}
++          {% if value_json is not mapping and value_json | length > 0 and value_json[0].temp is number and value_json[0].dewp is number %}
+             {% set t = value_json[0].temp %}
+             {% set d = value_json[0].dewp %}
+             {% set rh = 100 * e ** ((17.625 * d) / (243.04 + d)) / e ** ((17.625 * t) / (243.04 + t)) %}
+@@ -36,7 +36,7 @@
+         device_class: wind_speed
+         state_class: measurement
+         value_template: >-
+-          {% if value_json | length > 0 and value_json[0].wspd is number %}
++          {% if value_json is not mapping and value_json | length > 0 and value_json[0].wspd is number %}
+             {{ (value_json[0].wspd * 1.15078) | round(1) }}
+           {% else %}unknown{% endif %}
+       - name: "METAR wind gust"
+@@ -45,7 +45,7 @@
+         device_class: wind_speed
+         state_class: measurement
+         value_template: >-
+-          {% if value_json | length > 0 %}
++          {% if value_json is not mapping and value_json | length > 0 %}
+             {{ ((value_json[0].wgst | default(0, true)) * 1.15078) | round(1) }}
+           {% else %}unknown{% endif %}
+       - name: "METAR pressure"
+@@ -54,14 +54,14 @@
+         device_class: pressure
+         state_class: measurement
+         value_template: >-
+-          {% if value_json | length > 0 and value_json[0].altim is number %}
++          {% if value_json is not mapping and value_json | length > 0 and value_json[0].altim is number %}
+             {{ (value_json[0].altim * 0.02953) | round(2) }}
+           {% else %}unknown{% endif %}
+       - name: "METAR report time"
+         unique_id: metar_backup_report_time
+         device_class: timestamp
+         value_template: >-
+-          {% if value_json | length > 0 %}
++          {% if value_json is not mapping and value_json | length > 0 %}
+             {{ value_json[0].obsTime | timestamp_custom('%Y-%m-%dT%H:%M:%S+00:00', false) }}
+           {% else %}unknown{% endif %}
+ 
+@@ -72,6 +72,11 @@
+         unit_of_measurement: "°F"
+         device_class: temperature
+         state_class: measurement
++        availability: >-
++          {% set src = states('input_select.weather_source') %}
++          {% set nws = state_attr('weather.YOUR_NWS_ENTITY', 'temperature') | float(none) %}
++          {% set metar = states('sensor.metar_temperature') | float(none) %}
++          {{ (nws is not none) if src == 'NWS' else (metar is not none) if src == 'METAR' else (nws is not none or metar is not none) }}
+         state: >-
+           {% set src = states('input_select.weather_source') %}
+           {% set nws = state_attr('weather.YOUR_NWS_ENTITY', 'temperature') | float(none) %}
+@@ -85,6 +90,11 @@
+         unit_of_measurement: "%"
+         device_class: humidity
+         state_class: measurement
++        availability: >-
++          {% set src = states('input_select.weather_source') %}
++          {% set nws = state_attr('weather.YOUR_NWS_ENTITY', 'humidity') | float(none) %}
++          {% set metar = states('sensor.metar_humidity') | float(none) %}
++          {{ (nws is not none) if src == 'NWS' else (metar is not none) if src == 'METAR' else (nws is not none or metar is not none) }}
+         state: >-
+           {% set src = states('input_select.weather_source') %}
+           {% set nws = state_attr('weather.YOUR_NWS_ENTITY', 'humidity') | float(none) %}
+@@ -98,6 +108,11 @@
+         unit_of_measurement: "mph"
+         device_class: wind_speed
+         state_class: measurement
++        availability: >-
++          {% set src = states('input_select.weather_source') %}
++          {% set nws = state_attr('weather.YOUR_NWS_ENTITY', 'wind_speed') | float(none) %}
++          {% set metar = states('sensor.metar_wind_speed') | float(none) %}
++          {{ (nws is not none) if src == 'NWS' else (metar is not none) if src == 'METAR' else (nws is not none or metar is not none) }}
+         state: >-
+           {% set src = states('input_select.weather_source') %}
+           {% set nws = state_attr('weather.YOUR_NWS_ENTITY', 'wind_speed') | float(none) %}
